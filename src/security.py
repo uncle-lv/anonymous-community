@@ -1,22 +1,20 @@
-from typing import Optional
-from datetime import (datetime, timedelta)
+from datetime import timedelta
+from fastapi import (Depends, status, HTTPException)
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from fastapi import (Depends, HTTPException, status)
-from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+
+from loguru import logger
 
 from fastapi_jwt_auth import AuthJWT
 
+import crud
 from db import get_db
 from models import User
-import crud
 
 EXPIRES_TIME = timedelta(days=1)
 
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 class Settings(BaseModel):
@@ -40,5 +38,27 @@ def authenticate_user(username: str, password: str, db: Session):
         return False
     if not verify_password(password, user.hashed_password):
         return False
+    
+    return user
+
+def get_current(auth: AuthJWT, db: Session):
+    current_username = auth.get_jwt_subject() or None
+    if current_username:
+        user = crud.get_user_by_username(db, current_username)
+        
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Invalid token'
+            )
+        else:
+            return user
+        
+def get_active_user(user: User = Depends(get_current)):
+    if user.banned:
+        raise HTTPException(
+            status_code=400,
+            detail='Banned user'
+        )
     
     return user
