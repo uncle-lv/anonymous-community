@@ -49,18 +49,24 @@ class SecretCreate(BaseModel):
     
 
 class SecretUpdate(SecretBase):
-    creator: int
+    content: str
 
 
 class SecretOut(SecretBase):
     id: str
     creator: str
+    content: str
     created_time: datetime
-    modified_time: datetime
+    modified_time: Optional[datetime] = None
     
     
 class CommentBase(BaseModel):
-    id: int
     belong_to: int
-    creator: int
     content: str
+    
+    
+class CommentOut(CommentBase):
+    id: int
+    creator: int
+    created_time: datetime
+    modified_time: Optional[datetime] = None

@@ -3,6 +3,8 @@ from fastapi import FastAPI, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 
+from loguru import logger
+
 import crud
 import db
 import schemas
@@ -81,10 +83,69 @@ async def create_secret(secret: schemas.SecretCreate, current_user: models.User 
 
 @app.get('/api/secrets')
 async def get_secrets(skip: int = 0, limit: int = 50, db: Session = Depends(db.get_db)):
-    secrets = crud.get_secrets(db, skip, limit)
+    secrets = []
+    result = crud.get_secrets(db, skip, limit)
+    
+    for row in result:
+        secret = schemas.SecretOut(
+            id=row['id'],
+            creator=row['username'],
+            content=row['content'],
+            created_time=row['created_time'],
+            modified_time=row['modified_time']
+        )
+        secrets.append(secret)
+    
     return secrets
 
 
-@app.patch('/api/secrets')
-async def update_secret(secret: schemas.SecretUpdate, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
-    pass
+@app.get('/api/secrets/{id}')
+async def get_secret_by_id(id: int, db: Session = Depends(db.get_db)):
+    result_row = crud.get_secret(db, id)
+    
+    secret = schemas.SecretOut(
+        id=result_row['id'],
+        creator=result_row['username'],
+        content=result_row['content'],
+        created_time=result_row['created_time'],
+        modified_time=result_row['modified_time']
+        )
+    
+    return secret
+
+
+@app.put('/api/secrets/{id}')
+async def update_secret(secret: schemas.SecretUpdate, id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
+    db_secret = crud.get_secret_by_id(db, id)
+    creator = crud.get_user(db, db_secret.id)
+    if creator.username != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid credentials'
+        )
+    
+    crud.update_secret_content(db, id, secret.content)
+    return crud.get_secret(db, id)
+
+
+@app.delete('/api/secrets/{id}')
+async def del_secret(id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
+    db_secret = crud.get_secret_by_id(db, id)
+    
+    if db_secret is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Secret not found'
+        )
+    
+    creator = crud.get_user(db, db_secret.id)
+    if creator.username != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid credentials'
+        )
+        
+    crud.del_secret(db, id)
+    return {
+        'msg': 'succeed'
+    }
