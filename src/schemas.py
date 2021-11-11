@@ -31,9 +31,9 @@ class SecretBase(BaseModel):
     
 
 class Token(BaseModel):
-    token_type: str
     access_token: str
-    
+    token_type: str
+
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -45,7 +45,11 @@ class SecretBase(BaseModel):
 
 
 class SecretCreate(BaseModel):
-    content: str   
+    content: str
+    
+
+class SecretUpdate(SecretBase):
+    creator: int
 
 
 class SecretOut(SecretBase):
@@ -55,7 +59,7 @@ class SecretOut(SecretBase):
     modified_time: datetime
     
     
-class Comment(BaseModel):
+class CommentBase(BaseModel):
     id: int
     belong_to: int
     creator: int

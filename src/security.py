@@ -1,29 +1,28 @@
-from datetime import timedelta
-from fastapi import (Depends, status, HTTPException)
-from passlib.context import CryptContext
-from pydantic import BaseModel
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import Depends, status, HTTPException
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-
-from loguru import logger
-
-from fastapi_jwt_auth import AuthJWT
+from jose import jwt, JWTError
+from passlib.context import CryptContext
 
 import crud
-from db import get_db
-from models import User
+import db
+import models
+import schemas
 
-EXPIRES_TIME = timedelta(days=1)
 
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
+SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-class Settings(BaseModel):
-    authjwt_secret_key: str = '09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7'
-
-
-@AuthJWT.load_config
-def get_config():
-    return Settings()
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl='token',
+    scopes={"me": "Read information about the current user.", "items": "Read items."}
+    )
     
     
 def hash_password(password: str):
@@ -41,24 +40,39 @@ def authenticate_user(username: str, password: str, db: Session):
     
     return user
 
-def get_current(auth: AuthJWT, db: Session):
-    current_username = auth.get_jwt_subject() or None
-    if current_username:
-        user = crud.get_user_by_username(db, current_username)
-        
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='Invalid token'
-            )
-        else:
-            return user
-        
-def get_active_user(user: User = Depends(get_current)):
-    if user.banned:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)):
+    to_encode = data.copy()
+    expired_time = datetime.utcnow() + expires_delta
+    to_encode.update({'exp': expired_time})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(db.get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail='Invalid credentials',
+        headers={'WWW-Authenticate': 'Bearer'}
+    )
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get('username')
+        if username is None:
+            raise credentials_exception   
+        token_data = schemas.TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user = crud.get_user_by_username(db, username=token_data.username)
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def get_current_active_user(current_user: models.User = Depends(get_current_user)):
+    if current_user.banned:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail='Banned user'
         )
-    
-    return user
+        
+    return current_user

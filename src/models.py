@@ -1,6 +1,6 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import (Column, BigInteger, Integer, String, DateTime, Boolean, Text)
-from sqlalchemy.sql.schema import ForeignKey, ForeignKeyConstraint
+from sqlalchemy.sql.schema import ForeignKey
 
 Base = declarative_base()
 
@@ -14,6 +14,7 @@ class User(Base):
     hashed_password = Column(String(80), nullable=False)
     created_time = Column(DateTime, nullable=False)
     last_login = Column(DateTime, nullable=True)
+    is_super = Column(Boolean, default=False, nullable=False)
     banned = Column(Boolean, default=False, nullable=False)
     
 
