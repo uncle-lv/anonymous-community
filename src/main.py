@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 
 from loguru import logger
+from starlette.status import HTTP_404_NOT_FOUND
 
 import crud
 import db
@@ -18,9 +19,11 @@ app = FastAPI()
 async def startup():
     await db.database.connect()
 
+
 @app.on_event('shutdown')
 async def shutdown():
     await db.database.disconnect()
+
 
 @app.post('/api/users', response_model=schemas.UserOut)
 async def create_user(user: schemas.UserCreate, db: Session = Depends(db.get_db)):
@@ -80,6 +83,7 @@ async def get_current_user(current_user: models.User = Depends(security.get_curr
 @app.post('/api/secrets')
 async def create_secret(secret: schemas.SecretCreate, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     return crud.create_secret(db, secret, current_user.id)
+
 
 @app.get('/api/secrets')
 async def get_secrets(skip: int = 0, limit: int = 50, db: Session = Depends(db.get_db)):
@@ -146,6 +150,69 @@ async def del_secret(id: int, current_user: models.User = Depends(security.get_c
         )
         
     crud.del_secret(db, id)
+    return {
+        'msg': 'succeed'
+    }
+    
+@app.post('/api/comments', response_model=schemas.CommentOut)
+async def create_comment(comment: schemas.CommentBase, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
+    return crud.create_comment(db, comment, current_user.id)
+
+@app.get('/api/comments/{belong_to}')
+async def get_comments(belong_to: int, skip: int = 0, limit: int = 50, db: Session = Depends(db.get_db)):
+    comments = []
+    result = crud.get_comments(db, belong_to, skip, limit)
+    
+    for row in result:
+        comment = schemas.SecretOut(
+            id=row['id'],
+            creator=row['username'],
+            content=row['content'],
+            created_time=row['created_time'],
+            modified_time=row['modified_time']
+        )
+        comments.append(comment)
+    
+    return comments
+
+@app.put('/api/comments/{id}')
+async def update_comment(comment: schemas.CommentUpdate, id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
+    db_comment = crud.get_comment(db, id)
+    
+    if db_comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Comment not found'
+        )
+        
+    creator = crud.get_user(db, db_comment.creator)
+    if creator.username != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid credentials'
+        )
+    
+    crud.update_comment_content(db, id, comment.content)
+    return crud.get_comment(db, id)
+
+@app.delete('/api/comments/{id}')
+async def del_comment(id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
+    db_comment = crud.get_comment(db, id)
+    
+    if db_comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Comment not found'
+        )
+    
+    creator = crud.get_user(db, db_comment.creator)
+    if creator.username != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid credentials'
+        )
+        
+    crud.del_comment(db, id)
     return {
         'msg': 'succeed'
     }

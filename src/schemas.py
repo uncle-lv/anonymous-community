@@ -53,7 +53,7 @@ class SecretUpdate(SecretBase):
 
 
 class SecretOut(SecretBase):
-    id: str
+    id: int
     creator: str
     content: str
     created_time: datetime
@@ -67,6 +67,13 @@ class CommentBase(BaseModel):
     
 class CommentOut(CommentBase):
     id: int
-    creator: int
+    creator: str
     created_time: datetime
     modified_time: Optional[datetime] = None
+    
+    class Config:
+        orm_mode = True
+        
+
+class CommentUpdate(BaseModel):
+    content: str

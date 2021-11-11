@@ -54,7 +54,7 @@ def get_secret(db: Session, id: int):
         bindparam('id', type_=Integer)
     )
     return db.execute(stat, {'id': id}).first()
-
+    
 def get_secret_by_id(db: Session, id: int):
     return db.query(models.Secret).filter(models.Secret.id==id).first()
 
@@ -66,3 +66,30 @@ def del_secret(db: Session, id: int):
     db.query(models.Secret).filter(models.Secret.id==id).delete()
     db.commit()
     
+def create_comment(db: Session, comment: schemas.CommentBase, user_id: int):
+    db_comment = models.Comment(belong_to=comment.belong_to, creator=user_id, content=comment.content, created_time=datetime.utcnow())
+    db.add(db_comment)
+    db.commit()
+    db.refresh(db_comment)
+    return db_comment
+
+def get_comments(db: Session, belong_to: int, skip: int = 0, limit: int = 50):
+    raw_sql = 'SELECT c.id, u.username, c.content, c.created_time, c.modified_time FROM comment c INNER JOIN user u ON c.creator = u.id WHERE c.belong_to = :belong_to LIMIT :limit OFFSET :offset'
+    stat = text(raw_sql).bindparams(
+        bindparam('belong_to', type_=Integer),
+        bindparam('offset', type_=Integer),
+        bindparam('limit', type_=Integer)
+    )
+    return db.execute(stat, {'belong_to': belong_to, 'offset': skip, 'limit': limit}).fetchall()
+
+def get_comment(db: Session, id: int):
+    db_comment = db.query(models.Comment).filter(models.Comment.id==id).first()
+    return db_comment
+
+def update_comment_content(db: Session, id: int, content: str):
+    db.query(models.Comment).filter(models.Comment.id==id).update(dict(content=content, modified_time=datetime.utcnow()))
+    db.commit()
+    
+def del_comment(db: Session, id: int):
+    db.query(models.Comment).filter(models.Comment.id==id).delete()
+    db.commit()
