@@ -58,10 +58,10 @@ class SecretOut(SecretBase):
     content: str
     created_time: datetime
     modified_time: Optional[datetime] = None
+    comments: list = []
     
     
 class CommentBase(BaseModel):
-    belong_to: int
     content: str
     
     

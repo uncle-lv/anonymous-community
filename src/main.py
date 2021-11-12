@@ -105,16 +105,29 @@ async def get_secrets(skip: int = 0, limit: int = 50, db: Session = Depends(db.g
 
 @app.get('/api/secrets/{id}')
 async def get_secret_by_id(id: int, db: Session = Depends(db.get_db)):
-    result_row = crud.get_secret(db, id)
+    comments = []
     
+    result = crud.get_comments(db, id, 0, 50)
+    for row in result:
+        comment = schemas.CommentOut(
+            id=row['id'],
+            creator=row['username'],
+            content=row['content'],
+            created_time=row['created_time'],
+            modified_time=row['modified_time']
+        )
+        comments.append(comment)
+        
+    result_row = crud.get_secret(db, id)
     secret = schemas.SecretOut(
         id=result_row['id'],
         creator=result_row['username'],
         content=result_row['content'],
         created_time=result_row['created_time'],
-        modified_time=result_row['modified_time']
+        modified_time=result_row['modified_time'],
+        comments=comments
         )
-    
+        
     return secret
 
 
