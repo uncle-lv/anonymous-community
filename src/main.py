@@ -130,7 +130,7 @@ async def get_secret_by_id(id: int, db: Session = Depends(db.get_db)):
         modified_time=result_row['modified_time'],
         )
     
-    result = crud.get_comments(db, id, 0, 50)
+    result = crud.get_comments_belong_to(db, id, 0, 50)
     for row in result:
         comment = schemas.CommentOut(
             id=row['id'],
@@ -146,7 +146,7 @@ async def get_secret_by_id(id: int, db: Session = Depends(db.get_db)):
     return secret
 
 
-@app.put('/api/secrets/{id}', status_code=status.HTTP_200_OK)
+@app.patch('/api/secrets/{id}', status_code=status.HTTP_200_OK)
 async def update_secret(secret: schemas.SecretUpdate, id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     db_secret = crud.get_secret_by_id(db, id)
     creator = crud.get_user(db, db_secret.id)
@@ -222,7 +222,7 @@ async def get_comments_by_belong_to(belong_to: int, skip: int = 0, limit: int = 
     return comments
 
 
-@app.put('/api/comments/{id}', status_code=status.HTTP_200_OK)
+@app.patch('/api/comments/{id}', status_code=status.HTTP_200_OK)
 async def update_comment(comment: schemas.CommentUpdate, id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     db_comment = crud.get_comment(db, id)
     
