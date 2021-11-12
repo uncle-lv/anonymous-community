@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 
 from loguru import logger
-from starlette.status import HTTP_404_NOT_FOUND
 
 import crud
 import db
@@ -25,7 +24,7 @@ async def shutdown():
     await db.database.disconnect()
 
 
-@app.post('/api/users', response_model=schemas.UserOut)
+@app.post('/api/users', status_code=status.HTTP_201_CREATED)
 async def create_user(user: schemas.UserCreate, db: Session = Depends(db.get_db)):
     db_user = crud.get_user_by_email(db, user.email)
     if db_user:
@@ -38,7 +37,7 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(db.get_db)
     return crud.create_user(db, user)
 
 
-@app.get('/api/users/{id}', response_model=schemas.UserOut)
+@app.get('/api/users/{id}', response_model=schemas.UserOut, status_code=status.HTTP_200_OK)
 async def get_user_by_id(id: int, db: Session = Depends(db.get_db)):
     db_user = crud.get_user(db, id)
     if db_user is None:
@@ -46,20 +45,20 @@ async def get_user_by_id(id: int, db: Session = Depends(db.get_db)):
     return db_user
 
 
-@app.get('/api/users', response_model=List[schemas.UserOut])
+@app.get('/api/users', response_model=List[schemas.UserOut], status_code=status.HTTP_200_OK)
 async def get_users(skip: int = 0, limit: int = 50, db: Session = Depends(db.get_db)):
     users = crud.get_users(db, skip, limit)
     return users
 
 
-@app.post('/api/token')
+@app.post('/api/login/oauth/access_token', status_code=status.HTTP_201_CREATED)
 async def create_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(db.get_db)):
     user = security.authenticate_user(form_data.username, form_data.password, db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Incorrect username or password',
-             headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"}
         )
         
     access_token = security.create_access_token(
@@ -75,17 +74,17 @@ async def create_access_token(form_data: OAuth2PasswordRequestForm = Depends(), 
         }
 
 
-@app.get('/api/token/current_user', response_model=schemas.UserOut)
+@app.get('/api/token/current_user', response_model=schemas.UserOut, status_code=status.HTTP_200_OK)
 async def get_current_user(current_user: models.User = Depends(security.get_current_active_user)):
     return current_user
 
 
-@app.post('/api/secrets')
+@app.post('/api/secrets', response_model=schemas.SecretOut, status_code=status.HTTP_201_CREATED)
 async def create_secret(secret: schemas.SecretCreate, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     return crud.create_secret(db, secret, current_user.id)
 
 
-@app.get('/api/secrets')
+@app.get('/api/secrets', status_code=status.HTTP_200_OK)
 async def get_secrets(skip: int = 0, limit: int = 50, db: Session = Depends(db.get_db)):
     secrets = []
     result = crud.get_secrets(db, skip, limit)
@@ -103,9 +102,24 @@ async def get_secrets(skip: int = 0, limit: int = 50, db: Session = Depends(db.g
     return secrets
 
 
-@app.get('/api/secrets/{id}')
+@app.get('/api/secrets/{id}', status_code=status.HTTP_200_OK)
 async def get_secret_by_id(id: int, db: Session = Depends(db.get_db)):
     comments = []
+    
+    result_row = crud.get_secret(db, id)
+    if result_row is None:
+        raise HTTPException(
+            status_code=404,
+            detail='Secret not found'
+        )
+    
+    secret = schemas.SecretOut(
+        id=result_row['id'],
+        creator=result_row['username'],
+        content=result_row['content'],
+        created_time=result_row['created_time'],
+        modified_time=result_row['modified_time'],
+        )
     
     result = crud.get_comments(db, id, 0, 50)
     for row in result:
@@ -118,20 +132,12 @@ async def get_secret_by_id(id: int, db: Session = Depends(db.get_db)):
         )
         comments.append(comment)
         
-    result_row = crud.get_secret(db, id)
-    secret = schemas.SecretOut(
-        id=result_row['id'],
-        creator=result_row['username'],
-        content=result_row['content'],
-        created_time=result_row['created_time'],
-        modified_time=result_row['modified_time'],
-        comments=comments
-        )
+    secret.comments = comments
         
     return secret
 
 
-@app.put('/api/secrets/{id}')
+@app.put('/api/secrets/{id}', status_code=status.HTTP_200_OK)
 async def update_secret(secret: schemas.SecretUpdate, id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     db_secret = crud.get_secret_by_id(db, id)
     creator = crud.get_user(db, db_secret.id)
@@ -145,7 +151,7 @@ async def update_secret(secret: schemas.SecretUpdate, id: int, current_user: mod
     return crud.get_secret(db, id)
 
 
-@app.delete('/api/secrets/{id}')
+@app.delete('/api/secrets/{id}', status_code=status.HTTP_204_NO_CONTENT)
 async def del_secret(id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     db_secret = crud.get_secret_by_id(db, id)
     
@@ -163,15 +169,14 @@ async def del_secret(id: int, current_user: models.User = Depends(security.get_c
         )
         
     crud.del_secret(db, id)
-    return {
-        'msg': 'succeed'
-    }
+    return
     
-@app.post('/api/comments', response_model=schemas.CommentOut)
+@app.post('/api/comments', response_model=schemas.CommentOut, status_code=status.HTTP_201_CREATED)
 async def create_comment(comment: schemas.CommentBase, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     return crud.create_comment(db, comment, current_user.id)
 
-@app.get('/api/comments/{belong_to}')
+
+@app.get('/api/comments/{belong_to}', status_code=status.HTTP_200_OK)
 async def get_comments(belong_to: int, skip: int = 0, limit: int = 50, db: Session = Depends(db.get_db)):
     comments = []
     result = crud.get_comments(db, belong_to, skip, limit)
@@ -188,7 +193,7 @@ async def get_comments(belong_to: int, skip: int = 0, limit: int = 50, db: Sessi
     
     return comments
 
-@app.put('/api/comments/{id}')
+@app.put('/api/comments/{id}', status_code=status.HTTP_200_OK)
 async def update_comment(comment: schemas.CommentUpdate, id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     db_comment = crud.get_comment(db, id)
     
@@ -208,7 +213,7 @@ async def update_comment(comment: schemas.CommentUpdate, id: int, current_user: 
     crud.update_comment_content(db, id, comment.content)
     return crud.get_comment(db, id)
 
-@app.delete('/api/comments/{id}')
+@app.delete('/api/comments/{id}', status_code=status.HTTP_204_NO_CONTENT)
 async def del_comment(id: int, current_user: models.User = Depends(security.get_current_active_user), db: Session = Depends(db.get_db)):
     db_comment = crud.get_comment(db, id)
     
@@ -226,6 +231,4 @@ async def del_comment(id: int, current_user: models.User = Depends(security.get_
         )
         
     crud.del_comment(db, id)
-    return {
-        'msg': 'succeed'
-    }
+    return
