@@ -73,7 +73,7 @@ def create_comment(db: Session, comment: schemas.CommentBase, user_id: int):
     db.refresh(db_comment)
     return db_comment
 
-def get_comments(db: Session, belong_to: int, skip: int = 0, limit: int = 50):
+def get_comments_belong_to(db: Session, belong_to: int, skip: int = 0, limit: int = 50):
     raw_sql = 'SELECT c.id, u.username, c.content, c.created_time, c.modified_time FROM comment c INNER JOIN user u ON c.creator = u.id WHERE c.belong_to = :belong_to LIMIT :limit OFFSET :offset'
     stat = text(raw_sql).bindparams(
         bindparam('belong_to', type_=Integer),

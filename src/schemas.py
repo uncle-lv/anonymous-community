@@ -60,8 +60,12 @@ class SecretOut(SecretBase):
     modified_time: Optional[datetime] = None
     comments: list = []
     
+    class Config:
+        orm_mode = True
+    
     
 class CommentBase(BaseModel):
+    belong_to: Optional[int] = None
     content: str
     
     
